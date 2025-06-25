@@ -12,7 +12,6 @@ public class Main {
         while (loop){
             System.out.print(Lang.mainScreenTXT);
             String in = scan.nextLine();
-            System.out.println("ola");
 
         }
     }
