@@ -10,8 +10,9 @@ public class Main {
         Scanner scan = new Scanner(System.in);
 
         while (loop){
-            System.out.println(Lang.mainScreenTXT);
+            System.out.print(Lang.mainScreenTXT);
             String in = scan.nextLine();
+            System.out.println("ola");
 
         }
     }
