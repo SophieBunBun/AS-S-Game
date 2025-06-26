@@ -1,6 +1,7 @@
 package screenUtil;
 
 public class ScreenRenderer {
+    /*
     private char[][] grid;
     private boolean[][] selectedGrid;
     private int width;
@@ -74,4 +75,6 @@ public class ScreenRenderer {
         sb.append("</pre></html>");
         window.setText(sb.toString());
     }
+
+     */
 }

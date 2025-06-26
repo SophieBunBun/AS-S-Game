@@ -1,21 +1,21 @@
+package main;
+
 import data.GameData;
-import screenUtil.GameWindow;
-import screenUtil.MoveDirection;
-import screenUtil.Screen;
+import screenUtil.ScreenController;
 
-import java.awt.event.KeyEvent;
 
-public class Main {
+public class Game {
 
-    private static final GameData gameData = new GameData();
-    private static final Screen screenController = new Screen(false, gameData);
+    public static final GameData gameData = new GameData();
+    public static final ScreenController screenController = new ScreenController();
 
     public static void main(String[] args) throws InterruptedException {
 
-        screenController.changeRes(80, 30);
+        screenController.initialize(true);
 
         while (gameData.isRunning()) {
 
+            /*
             switch (gameData.getKeyPressed()){
                 case (KeyEvent.VK_ENTER) -> {screenController.action();}
                 case (KeyEvent.VK_LEFT) -> {screenController.move(MoveDirection.LEFT);}
@@ -23,13 +23,12 @@ public class Main {
                 case (KeyEvent.VK_UP) -> {screenController.move(MoveDirection.UP);}
                 case (KeyEvent.VK_DOWN) -> {screenController.move(MoveDirection.DOWN);}
             }
+            */
 
             gameData.tick();
-            screenController.printScreen();
+            screenController.render();
 
             Thread.sleep(5);
         };
-
-        screenController.close();
     }
 }

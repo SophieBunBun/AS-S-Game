@@ -1,42 +1,18 @@
 package screenUtil;
 
 import data.GameData;
+import main.Game;
 
-public class Screen {
+public class ScreenController {
 
-    private GameWindow gameWindow;
+    private IGameRenderer renderer;
+    private boolean consoleMode = true;
+
     private GameData gameData;
 
-    private IAreaScreen[] screens;
+    private ScreenType openScreen;
 
-    private int selectedScreen;
-    private int openScreen = 1;
-
-    private ScreenRenderer printGrid;
-
-    private int width;
-    private int height;
-
-    public Screen(boolean console, GameData data){
-
-
-        gameWindow = customWindow;
-        gameData = data;
-
-        screens = new IAreaScreen[]{
-                new MenuScreen(),
-                new TitleScreen(),
-                new TitleScreen(),
-                new TitleScreen(),
-                new TitleScreen(),
-                new TitleScreen(),
-                new TitleScreen(),
-                new SettingsScreen()
-        };
-
-        printGrid = new ScreenRenderer(customWindow);
-    }
-
+/*
     public void move (MoveDirection direction){
         boolean focus = screens[selectedScreen].move(direction);
         if (focus) {selectedScreen = selectedScreen == 0 ? openScreen : 0;
@@ -44,7 +20,46 @@ public class Screen {
 
         printScreen();
     }
+ */
 
+    public void changeScreen (ScreenType type){
+        openScreen = type;
+        renderer.setOpenScreen(type);
+    }
+
+    public ScreenType getOpenScreen (){
+        return openScreen;
+    }
+
+    public void setConsoleMode(boolean set){
+        if (consoleMode != set){
+            consoleMode = set;
+            if (set) {
+                if (renderer != null) {
+                    renderer.close();
+                }
+                renderer = new ConsoleScreenController();
+                renderer.initialize(this);
+            }
+            else {
+                if (renderer != null) {
+                    renderer.close();
+                }
+            }
+        }
+    }
+
+    public void render(){
+        renderer.render();
+    }
+
+    public void initialize(boolean b) {
+        this.gameData = Game.gameData;
+        consoleMode = false;
+        setConsoleMode(true);
+    }
+
+    /*
     public void action (){
         int result = screens[selectedScreen].action();
         System.out.println("Action");
@@ -75,8 +90,5 @@ public class Screen {
         printGrid.printScreen();
         this.printGrid.newGrid(width, height);
     }
-
-    public void close(){
-        gameWindow.close();
-    }
+     */
 }

@@ -1,13 +1,17 @@
 package data;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 
-public class GameData {
+public class GameData implements IGameData {
 
     private boolean running;
     private int key = 0;
 
     private int cash = 0;
+    private int level = 1;
 
     private Inventory inventory;
 
@@ -40,7 +44,15 @@ public class GameData {
         running = true;
     }
 
-    public void tick() {}
+    public void tick() {
+
+    }
+
+    public void forwardTicks(int count) {
+        for(int i = 0; i < count; i++){
+            tick();
+        }
+    }
 
     public boolean isRunning() {
         return running;
@@ -48,5 +60,16 @@ public class GameData {
 
     public void endGame() {
         running = false;
+    }
+
+    @Override
+    public List<StoreEntry> shopOptions() {
+        List<StoreEntry> options = new ArrayList<>();
+        for (StoreEntry entry : Lookup.storeEntries){
+            if (entry.level() <= this.level){
+                options.add(entry);
+            }
+        }
+        return options;
     }
 }
