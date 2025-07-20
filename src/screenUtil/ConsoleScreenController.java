@@ -10,13 +10,22 @@ import com.googlecode.lanterna.screen.Screen;
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
 import data.GameData;
 import data.Lookup;
+import data.StoreEntry;
 import main.Game;
+import screenUtil.CScreenControllers.CEmptyScreen;
+import screenUtil.CScreenControllers.CMenuScreenController;
+import screenUtil.CScreenControllers.CShopScreenController;
+import screenUtil.CScreenControllers.ICScreenController;
 import screenUtil.CustomWidgets.MenuButtonRenderer;
+import screenUtil.CustomWidgets.StoreEntryComp;
 
+import javax.sound.sampled.Line;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public class ConsoleScreenController implements IGameRenderer{
 
@@ -25,21 +34,35 @@ public class ConsoleScreenController implements IGameRenderer{
     private BasicWindow mainWindow;
     private Panel mainPanel;
 
-    private Panel openScreen;
+    private List<ICScreenController> screens = new ArrayList<>();
+    private int focusedScreen = 0;
 
-    private Button lastScreenFocus;
-    private Button focusedButton;
-    private Dictionary<Button, Consumer<MoveDirection>> cycler;
+    private boolean lock;
 
-    private List<Consumer<ScreenType>> menuUpdateList;
-    private List<Consumer<GameData>> screenUpdateList;
+    private Window alert;
+    private boolean resizeLock;
 
-    private List<Consumer<TerminalSize>> updatePreferedSizeList;
+    private Runnable winSizeCheck = () -> {
+        if ((screen.getTerminalSize().getColumns() < 80 || screen.getTerminalSize().getRows() < 30)){
+            if (!resizeLock){
+                this.gui.addWindow(alert);
+                resizeLock = true;
+            }
+        }
+        else if (resizeLock){
+            this.gui.removeWindow(alert);
+            resizeLock = false;
+        }
+    };
+
+    private Queue<Runnable> runQueue = new ArrayDeque<>();
+
+    public void addToRunQueue(Runnable runnable){runQueue.add(runnable);}
 
     public void initialize(ScreenController screenController){
 
         try {
-            this.screen = new DefaultTerminalFactory().createScreen();
+            this.screen = new DefaultTerminalFactory().setInitialTerminalSize(new TerminalSize(80, 30)).createScreen();
             this.gui = new MultiWindowTextGUI(screen);
 
             gui.setTheme(SimpleTheme.makeTheme(
@@ -51,19 +74,33 @@ public class ConsoleScreenController implements IGameRenderer{
             ));
 
             this.mainWindow = new BasicWindow();
-            this.mainWindow.setHints(Set.of(Window.Hint.EXPANDED, Window.Hint.FULL_SCREEN));
+            this.mainWindow.setHints(Set.of(Window.Hint.FULL_SCREEN));
+
+            this.alert = new BasicWindow();
+            this.alert.setComponent(new Label("Resize window!"));
 
             new Thread(() -> {
                 while (true) {
+
                     try {
-                        KeyStroke key = screen.pollInput();
-                        if (key != null) {
-                            switch (key.getKeyType()){
-                                case ArrowLeft -> cycler.get(focusedButton).accept(MoveDirection.LEFT);
-                                case ArrowRight -> cycler.get(focusedButton).accept(MoveDirection.RIGHT);
-                                case ArrowUp -> cycler.get(focusedButton).accept(MoveDirection.UP);
-                                case ArrowDown -> cycler.get(focusedButton).accept(MoveDirection.DOWN);
-                                case Enter -> focusedButton.handleKeyStroke(key);
+                        if (!resizeLock) {
+                            KeyStroke key = screen.pollInput();
+                            if (key != null) {
+                                AbstractInteractableComponent<?> focusedButton = screens.get(focusedScreen).getSelected();
+                                Dictionary<AbstractInteractableComponent<?>, BiConsumer<Boolean, MoveDirection>> cycler =
+                                        screens.get(focusedScreen).getCycler();
+
+                                switch (key.getKeyType()) {
+                                    case ArrowLeft ->
+                                            cycler.get(focusedButton).accept(key.isShiftDown(), MoveDirection.LEFT);
+                                    case ArrowRight ->
+                                            cycler.get(focusedButton).accept(key.isShiftDown(), MoveDirection.RIGHT);
+                                    case ArrowUp ->
+                                            cycler.get(focusedButton).accept(key.isShiftDown(), MoveDirection.UP);
+                                    case ArrowDown ->
+                                            cycler.get(focusedButton).accept(key.isShiftDown(), MoveDirection.DOWN);
+                                    case Enter -> focusedButton.handleInput(key);
+                                }
                             }
                         }
                         Thread.sleep(100);
@@ -73,14 +110,22 @@ public class ConsoleScreenController implements IGameRenderer{
                 }
             }).start();
 
-            this.mainPanel = new Panel();
+            this.mainPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
+            this.mainPanel.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill, LinearLayout.GrowPolicy.CanGrow));
             this.mainWindow.setComponent(mainPanel);
 
             this.mainWindow.addWindowListener(new WindowListener() {
                 @Override
                 public void onResized(Window window, TerminalSize terminalSize, TerminalSize terminalSize1) {
-                    for (Consumer<TerminalSize> resize : updatePreferedSizeList){
-                        resize.accept(terminalSize1);
+
+                    winSizeCheck.run();
+
+                    if (!resizeLock){
+                        for (ICScreenController controller : screens){
+                            for (Consumer<TerminalSize> resize : controller.getUpdatePreferedSizeList()){
+                                resize.accept(terminalSize1);
+                            }
+                        }
                     }
                 }
 
@@ -101,14 +146,10 @@ public class ConsoleScreenController implements IGameRenderer{
 
             this.gui.addWindow(mainWindow);
 
-            //CYCLER INIT
-            cycler = new Hashtable<>();
-
-            //RESIZING
-            updatePreferedSizeList = new ArrayList<>();
-
             // MENU INITIALIZATION
-            buildMenu();
+            screens.add(new CMenuScreenController(this));
+            focusedScreen = 0;
+            Game.screenController.changeScreen(ScreenType.TITLE);
 
             screen.startScreen();
 
@@ -117,123 +158,41 @@ public class ConsoleScreenController implements IGameRenderer{
         }
     }
 
-    private void buildMenu(){
-        Panel contentPanel = new Panel().setPreferredSize(screen.getTerminalSize().withRelativeRows(-2).withColumns(19));
-        updatePreferedSizeList.add((size) -> {
-           contentPanel.setPreferredSize(screen.getTerminalSize().withRelativeRows(-2).withColumns(19));
-        });
-        contentPanel.setLayoutManager(new LinearLayout(Direction.VERTICAL).setSpacing(1));
+    public Panel getMainPanel() {
+        return mainPanel;
+    }
 
-        menuUpdateList = new ArrayList<>();
+    public Screen getScreen() {
+        return screen;
+    }
 
-        List<Button> menuButtons = new ArrayList<>();
+    public MultiWindowTextGUI getGUI() {
+        return gui;
+    }
 
-        for (ScreenType option : ScreenType.values()){
-            if (option != ScreenType.MENU){
-                Panel optionPanel = new Panel().setSize(new TerminalSize(18, 1));
+    public void cycleScreenFocus(){
+        focusedScreen++;
+        if (focusedScreen == screens.size()) {focusedScreen = 0;}
+        screens.get(focusedScreen).returnFocus();
+    }
 
-                Button optionButton = new Button(Lookup.screenTypeName.get(option), () -> {
-                    Game.screenController.changeScreen(option);
-                });
-
-                optionButton.setRenderer(new MenuButtonRenderer());
-
-                menuUpdateList.add((screenType -> {
-                    if (screenType == option){
-                        optionButton.setEnabled(false);
-                    }
-                    else {
-                        optionButton.setEnabled(true);
-                    }
-                }));
-
-                if (option.ordinal() == 1){
-                    optionButton.takeFocus();
-                    focusedButton = optionButton;
-                }
-
-                menuButtons.add(optionButton);
-
-                optionPanel.addComponent(optionButton, BorderLayout.Location.CENTER);
-                contentPanel.addComponent(optionPanel);
-            }
+    public void setOpenScreen (ScreenType type) {
+        lock = true;
+        if (screens.size() > 1){
+            ICScreenController screenToKill = screens.removeLast();
+            screenToKill.killScreen();
         }
 
-        configureMenuButtonCycling(menuButtons);
-
-        mainPanel.addComponent(contentPanel.withBorder(Borders.singleLine("Menu")));
-        Game.screenController.changeScreen(ScreenType.TITLE);
-    }
-
-    private void configureMenuButtonCycling(List<Button> menuButtons){
-        cycler.put(menuButtons.get(0), (direction -> {
-            switch (direction){
-                case DOWN -> {
-                    focusedButton = menuButtons.get(1);
-                    focusedButton.takeFocus();
-                }
-                case RIGHT -> switchToScreenFocus();
-            }
-        }));
-
-        cycler.put(menuButtons.get(6), (direction -> {
-            switch (direction){
-                case UP -> {
-                    focusedButton = menuButtons.get(5);
-                    focusedButton.takeFocus();
-                }
-                case RIGHT -> switchToScreenFocus();
-            }
-        }));
-
-        for (int x = 1; x < menuButtons.size() - 1; x++) {
-            int finalX = x;
-            cycler.put(menuButtons.get(x), (direction -> {
-                switch (direction){
-                    case DOWN -> {
-                        focusedButton = menuButtons.get(finalX + 1);
-                        focusedButton.takeFocus();
-                    }
-                    case UP -> {
-                        focusedButton = menuButtons.get(finalX - 1);
-                        focusedButton.takeFocus();
-                    }
-                    case RIGHT -> switchToScreenFocus();
-                }
-            }));
+        switch (type) {
+            case TITLE -> screens.add(new CEmptyScreen(this));
+            case SHOP -> screens.add(new CShopScreenController(this));
+            case EXPEDITIONS -> screens.add(new CEmptyScreen(this));
+            case GREENHOUSE -> screens.add(new CEmptyScreen(this));
+            case PROCESSING -> screens.add(new CEmptyScreen(this));
+            case CUSTOMERS -> screens.add(new CEmptyScreen(this));
+            case SETTINGS -> screens.add(new CEmptyScreen(this));
         }
-    }
-
-    private void switchToScreenFocus(){
-        Button lastMenuFocus = focusedButton;
-        focusedButton = lastScreenFocus;
-        lastScreenFocus = lastMenuFocus;
-        focusedButton.takeFocus();
-    }
-
-    private void updateMenu (ScreenType type) {
-        for (Consumer<ScreenType> update : menuUpdateList){
-            update.accept(type);
-        }
-    }
-
-    private void createPanel (ScreenType type) {
-        if (openScreen != null) {mainPanel.removeComponent(openScreen);}
-        Panel contentPanel = new Panel();
-        openScreen = contentPanel;
-        mainPanel.addComponent(openScreen);
-    }
-
-    public void updateCurrentScreen (GameData gameData) {
-        for (Consumer<GameData> update : screenUpdateList){
-            update.accept(gameData);
-        }
-    }
-
-    @Override
-    public void setOpenScreen(ScreenType type) {
-        updateMenu(type);
-        createPanel(type);
+        lock = false;
     }
 
     @Override
@@ -246,9 +205,24 @@ public class ConsoleScreenController implements IGameRenderer{
         }
     }
 
+    private void updateScreens(){
+        for (ICScreenController screen : screens){
+            screen.updateScreen();
+        }
+    }
+
     @Override
     public void render() {
         try {
+            if (!lock && !resizeLock){
+
+                while (!runQueue.isEmpty()){
+                    runQueue.remove().run();
+                }
+
+                updateScreens();
+            }
+            winSizeCheck.run();
             gui.updateScreen();
         }
         catch (IOException e){

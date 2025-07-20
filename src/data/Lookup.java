@@ -22,6 +22,7 @@ public class Lookup {
 
     //Store entries
     public static final StoreEntry[] storeEntries;
+    public static final Dictionary<Item, Integer> itemValues;
 
     //Expeditions
     public static final Dictionary<ExpeditionZone, ExpeditionInfo> expeditionZoneInfo;
@@ -40,6 +41,10 @@ public class Lookup {
         itemNames = new Hashtable<>();
         itemNames.put(Item.FERTILIZER_1, "Basic fertilizer");
         itemNames.put(Item.FERTILIZER_2, "Advanced fertilizer");
+
+        itemValues = new Hashtable<>();
+        itemValues.put(Item.FERTILIZER_1, 2);
+        itemValues.put(Item.FERTILIZER_2, 5);
 
         //TODO itemDescriptions
 

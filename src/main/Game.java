@@ -28,7 +28,7 @@ public class Game {
             gameData.tick();
             screenController.render();
 
-            Thread.sleep(5);
+            Thread.sleep(10);
         };
     }
 }

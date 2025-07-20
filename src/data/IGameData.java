@@ -10,20 +10,23 @@ public interface IGameData {
     //Returns how much cash you have
     int getCash();
 
+    //Returns current level
+    int getLevel();
+
     //Returns true if successful purchase
     boolean buy(StoreEntry entry, int count);
 
     //Returns a list of all the things you can
     List<StoreEntry> shopOptions();
 
-    //Returns true if purchasable
-    boolean canBuy(StoreEntry entry, int count);
+    //Returns amount that is purchasable
+    int amountPurchasable(StoreEntry entry);
 
-    //Returns inventory
-    Inventory getInventory();
+    //Returns sellable items
+    List<ItemStack> getSellable();
 
-    //Returns nothing
-    void sell(List<ItemStack> items);
+    //Returns amount earned
+    int sell(ItemStack item);
 
     //Returns wait time
     int startExpedition(ExpeditionZone zone, int days);
